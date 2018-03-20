@@ -1,0 +1,459 @@
+---
+title: "Machine Learning Workshop"
+author: "Jenn Halbleib"
+date: "March 19, 2018"
+output: html_document
+
+header-includes:
+- \usepackage{graphicx,latexsym}
+- \usepackage{amssymb,amsthm,amsmath}
+- \usepackage{booktabs,setspace}
+- \usepackage{float}
+bibliography: ML.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##### Contact Info  
+
+If you'd like to get in touch after the workshop is over, you can find me on LinkedIn at https://www.linkedin.com/in/jenn-halbleib/ or can e-mail me at jennifer.halbleib@gmail.com.
+
+# DataFest 2018 Machine Learning Workshop 
+
+This workshop will introduce a few machine learning techniques that may prove useful during DataFest. But first, let's talk about some basics.
+
+### To Explain or to Predict?  
+
+(See Galit Shmueli's paper of the same name here for a more in-depth discussion of this topic: https://www.stat.berkeley.edu/~aldous/157/Papers/shmueli.pdf)
+
+When choosing a modeling paradigm, we need to ask ourselves, "Do I care more about the relationships between the variables in the data or do I care more about generating likely outcomes for future samples, given the data I have now?"   
+
+If the answer is relationships, we're going to implement an explanatory technique. The most common explanatory modeling technique is linear regression, in all it's various forms. If the answer is future outcomes, we're going to implement a predictive model. (Note, linear regression may be used for prediction as well as explanation.)  
+
+For the most part, Machine Learning concerns itself with predictive modeling, since machine learning models are often too complex to be easily interpretable. However, some machine learning models, like principle components analysis, can help us investigate relationships with explanation in mind.  
+
+### So, What is Machine Learning, Exactly?  
+
+This is a complicated question that we could spend several textbooks worth of material on. But, for our purposes, it suffices to say that machine learning centers on the construction of an algorithm that responds to data inputs to find underlying patterns or structures. I also like this excerpt from the Wikipedia page on Machine Learning: "Tom M. Mitchell provided a widely quoted, more formal definition of the algorithms studied in the machine learning field: 'A computer program is said to learn from experience E with respect to some class of tasks T and performance measure P if its performance at tasks in T, as measured by P, improves with experience E.'"   
+  
+  
+### Supervised and Unsupervised  
+
+Generally, machine learning techniques fall into one of two camps: supervised and unsupervised.  
+
+When we implement a supervised machine learning algorithm, we tell the algorithm the possible outcomes and teach it to group observations into those outcomes. For example, the Iris Dataset, which we'll work with in a bit, contains measurements from three types of Irises: Setosa, Versicolour, and Virginica. An algorithm that classifies the irises based on their measurements into their type groups would be an example of supervised learning.  
+
+When we implement an unsupervised machine learning algorithm, our parameter is the number of groups and we tell the algorithm to sort out the data intelligently into that number. For example, to implement an unsupervised learning algorithm with the Irises data, we would tell the algorithm we have 3 groups and then see how good our algorithm is at guessing the features of the 3 groups.  
+This difference is a bit confusing without a direct example, so read on!  
+  
+#### Clustering on the Irises Data  
+
+Using the Irises Data, we're going to implement two examples to illustrate the difference between supervised and unsupervised learning.  
+
+First, let's start by loading the data. It's included in base R under the name iris.
+
+```{r}
+iris <- iris
+
+#The str() command prints the structure of objects stored in R. 
+#I like it better than head(), which is another common choice for glancing at a data set.
+str(iris)
+```
+
+So, as we can see, the Iris data set contains petal and sepal lengths and widths for 150 irises. The variable "Species" gives the type of iris.  
+
+##### K-Nearest Neighbors (Supervised)  
+
+In k-nearest neighbors (knn), we specify k and then the algorithm finds the closest (usually by euclidean distance) k neighbors to the point under analysis. In this way, the sample space is divided up. Click here for an interactive demo: http://vision.stanford.edu/teaching/cs231n-demos/knn/
+
+Notice, based on the color of the points in the demo, the area of the chart is divided up into color blocks. In this way, the algorithm creates a prediction "map". Any new point presented to the trained model will be grouped into a color based on the points used to train. More on this idea of prediction and training after this example. 
+
+We'll need three packages for the following code, which was adapted from an exercise developed by Professor Albert Kim.
+```{r, warnings = FALSE}
+library(tidyverse)
+library(caret)
+library(gridExtra)
+```
+
+
+Before we fit the model, let's look at the data.
+```{r}
+ggplot(iris, aes(x = Sepal.Length, y = Sepal.Width, col = Species)) +
+  geom_point()
+```
+
+Notice that there is some overlap between measurements from versicolor and virginica. How do you think this will affect our model?  
+
+The following code creates the actual model. 
+```{r}
+#To try different k values, change here
+k <- 3
+
+#Setting model formula
+#(for those who have taken 230, notice the model formula matches the form of the lm function)
+model_formula <- as.formula(Species ~ Sepal.Length + Sepal.Width)
+
+#create the model
+model_knn <- caret::knn3(model_formula, data = iris, k = k)
+```
+
+Now, there are two ways to use the knn model to get predictions. For brevity, we'll discuss the most straightforward version. 
+
+The following code makes predictions by guessing that the type assigned the highest probability by the model (meaning the majority of the k neighbors are of that type) is the true type. Ties are broken at random. Notice, we fit the model with the iris data and we're feeding the iris data back to the model to get the fitted types. In general, we don't want to use our initial data as the new data, which I'll address before the end of the workshop.
+
+```{r}
+y_hat <- model_knn %>% 
+  predict(newdata = iris, type = "class")
+y_hat
+```
+
+Let's plot our predictions and our true values to get an idea of how well the model predicts. 
+
+```{r}
+#Bind y_hat outcomes to the iris data
+iris <- iris %>% bind_cols(as.data.frame(y_hat))
+
+#Make plot of true values
+truth_plot <- ggplot(iris, aes(x = Sepal.Length, y = Sepal.Width)) +
+  geom_point(aes(col = Species)) +
+  labs(x = "Sepal Length", y = "Sepal Width", alpha = "Fitted Prob", title = "True outcomes")
+
+#Make plot of fitted values
+fitted_plot <- ggplot(iris, aes(x = Sepal.Length, y = Sepal.Width)) +
+  geom_point(aes(col = y_hat)) +
+  labs(x = "Sepal Length", y = "Sepal Width", alpha = "Fitted Prob", title = "Fitted probabilities")
+
+#Plot true and fitted values side-by-side
+grid.arrange(truth_plot, fitted_plot, ncol = 2)
+```
+
+Examine in the center of the plot, where we noticed earlier some overlap between versicolor and virginica. As expected, we can find some points here that have been misclassified. 
+
+Coming back to the original point of this example, notice that knn counts as supervised learning because we fed our algorithm the outcome. We checked distance of observations from neighboring points, checked the Iris classification of those points, and then used that known classification to classify neighboring points. 
+
+(Note: Since we're moving quickly in this workshop, we are glossing over some details. The textbook Introduction to Statistical Learning by Hastie and Tibshurani is an excellent resource for any topic you want to dive deeper on. Download the book here: http://www-bcf.usc.edu/~gareth/ISL/)  
+
+##### K-Means Clustering (Unsupervised)  
+
+In K-means clustering, instead of providing the algorithm with the outcomes to predict for, we specify a number of groups and the algorithm matches based on observation features. For this reason, we don't need an outcome variable in our data set.
+
+```{r}
+iris_predictors <- iris %>% select(-Species, -y_hat)
+```
+
+Now, we set k to the number of groups and fit the model. (Note: When you're at DataFest and attempting to expand this example to a messier data set, know that there are several good methods of going about choosing the optimal number of clusters. Here's a good tutorial: https://uc-r.github.io/kmeans_clustering#optimal)
+
+```{r}
+#Again, this code is adapted from Professor Kim's 495 materials
+k <- 3
+
+#fit model
+k_means_results <- kmeans(iris_predictors, centers = k)
+
+# Assign each of 150 rows to one of k clusters
+clusters <- k_means_results$cluster
+
+# Get cluster centers and add cluster number column
+cluster_centers <- k_means_results$centers %>% 
+  as_tibble() %>% 
+  mutate(cluster = 1:k) %>% 
+  select(cluster, everything())
+
+```
+
+Now, we can visualize the clusters using the function fviz_cluser(). 
+
+```{r, warnings = FALSE}
+library(factoextra)
+```
+
+```{r}
+clust_plot <- fviz_cluster(k_means_results, data = iris_predictors, choose.vars = c("Sepal.Length", "Sepal.Width"), show.clust.cent = TRUE, geom = "point")
+clust_plot
+
+#Plot side-by-side with true values
+grid.arrange(truth_plot, clust_plot, ncol = 2)
+```
+
+So, again, it looks like we have some misclassification happening in the versicolor and virginica overlap. Notice, in the k-means clustering, the colors don't match the colors in the true outcomes plot. This is because the clusters are numbered randomly by the algorithm.  
+
+### Training, Test, and Validation Sets  
+
+In the preceding examples, we've neglected an important detail of machine learning. The intention behind these algorithms is that we will train on one data set and use the trained model to make predictions on a new data set. But, we rarely have a new data set to work with. This is why we typically divide the data set we have up in several sets. One set, typically the bulk of the data, is for training the model. Another set is for testing, which we use to check that our model is working the way we expect it to. In some cases, it is also appropriate to set aside a third set, known as the validation set, which we hold in reserve until we have completely finished work on our model to do a final accuracy test before deploying the model. 
+
+#### Trees and Random Forests with Test and Training Sets  
+
+In this example, we'll use a data set on mushrooms, which can be downloaded here: https://www.kaggle.com/uciml/mushroom-classification/data. (Note: The variable names 
+assigned by Kaggle like cap-shape will not work with the randomForest function. To fix, open the .csv in R, search for - and replace with .)
+
+We want to identify which mushrooms are edible and which are poisonous. 
+
+```{r}
+set.seed(10067)
+#Insert the file-path on your local machine or the r-server inside the quotation marks
+mushrooms <- read_csv("mushrooms.csv") %>% tibble::rownames_to_column(var = "ID")
+
+#Look at the data structure
+str(mushrooms)
+
+#Split into test and training sets
+train <- mushrooms %>% sample_frac(0.8)
+test <- mushrooms %>% anti_join(train, by = "ID")  %>% select(-ID)
+train <- train  %>% select(-ID)
+
+#Here, I'm combining the data sets to get around a common error with RandomForest.
+#We'll use the size variables to access the two sets
+size_train <- nrow(train)
+size_test <- nrow(test)
+full <- train %>% bind_rows(test)
+```
+
+The class variable specifies "e" for edible and "p" for poisonous. We'll fit a random forest, which is a grouping of trees, to predict class. 
+
+Let's fit one tree to start.
+```{r, warnings = FALSE}
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+#Make tree
+single_tree <- rpart(class~., data = train, cp = 0.001)
+
+#Plot tree
+rpart.plot(single_tree)
+```
+
+From Stephen Milborro at http://www.milbo.org/rpart-plot/prp.pdf: 
+Each node shows
+- the predicted class (poison or edible),
+- the predicted probability of being in the node's state class,
+- the percentage of observations in the node.  
+
+So, at each split, the algorithm has made an "intelligent decision" about where in the data to split the observations to make the best prediction. (Really, this "intelligent decision" relates to comparing different split options with an error measurement.)  
+
+
+A random forest fits many trees and "averages" them make predictions. 
+```{r, warnings = FALSE}
+library(randomForest)
+```
+
+```{r}
+#Convert all variables to factors
+full <- full %>% mutate(class = as.factor(class), 
+                                          cap.shape = as.factor(cap.shape), 
+                                          cap.surface = as.factor(cap.surface),
+                                          cap.color = as.factor(cap.color),
+                                          bruises = as.factor(bruises),
+                                          odor = as.factor(odor),
+                                          gill.attachment = as.factor(gill.attachment),
+                                          gill.spacing = as.factor(gill.spacing),
+                                          gill.size = as.factor(gill.size),
+                                          gill.color = as.factor(gill.color),
+                                          stalk.shape = as.factor(stalk.shape),
+                                          stalk.root = as.factor(stalk.root),
+                                          stalk.surface.above.ring = as.factor(stalk.surface.above.ring),
+                                          stalk.surface.below.ring = as.factor(stalk.surface.below.ring),
+                                          veil.type = as.factor(veil.type),
+                                          veil.color = as.factor(veil.color),
+                                          ring.number = as.factor(ring.number),
+                                          ring.type = as.factor(ring.type),
+                                          spore.print.color = as.factor(spore.print.color),
+                                          population = as.factor(population),
+                                          habitat = as.factor(habitat),
+                          stalk.color.above.ring = as.factor(stalk.color.above.ring),
+                          stalk.color.below.ring = as.factor(stalk.color.below.ring))
+
+rf_mod <- randomForest(class ~ ., data = full %>% slice(1:size_train), importance = TRUE, na.action = na.omit, ntree = 500)
+```
+
+We can see which variables are most important in classification according to the tree model by calling varImpPlot.
+```{r}
+#print the 10 most important variables
+varImpPlot(rf_mod, sort = T, n.var = 10, main = "Variable Importance Plot")
+```
+
+And, we can make predictions on the test set using our model.
+```{r}
+y_hat <- predict(rf_mod, newdata = full %>% slice((size_train + 1):nrow(full)))
+str(y_hat)
+```
+
+Now, let's begin to think about assessing the performance of our model. Checking the percent of correct predictions is a simple place to start.
+```{r}
+test <- test %>% bind_cols(as.data.frame(y_hat)) %>% mutate(y_hat = as.character(y_hat))  %>% mutate(predict_correct = ifelse(class == y_hat, 1, 0))
+
+correct_percent <- sum(test$predict_correct)/size_test
+correct_percent
+```
+
+So, our random forest is giving us a perfect classification rate on this particular test set. Of course, this won't be the case for every randomly selected set. We just got lucky.  
+  
+We can also use probabilities (instead of majority rules votes) to classify error with a measurement called multilog loss.
+```{r}
+p_hat_matrix <- rf_mod %>% 
+  predict(type = "prob", newdata = full %>% slice((size_train + 1):nrow(full)))
+
+# Look at a random sample of 5 of them
+p_hat_matrix %>% 
+  as_tibble() %>% 
+  sample_n(5)
+```
+
+```{r, warnings = FALSE}
+library(MLmetrics)
+```
+
+```{r}
+MultiLogLoss(y_true = test$class, y_pred = p_hat_matrix)
+```
+
+Multilog Loss penalizes the model for close guesses (meaning, the more 50/50 coin flips when predicting, the higher multilog loss will be).
+
+### Just for Fun: Deep Learning with a Neural Network  (A Chapter from my Stat Comps)
+
+####Hello World
+
+"You can think of 'solving' MNIST as the "hello world" of deep learning--it's what you do to verify that your algorithms are working as expected."  
+-Francois Chollet 
+
+\begin{figure}[H]
+  \centering
+      \includegraphics{Digits2.png}
+        \caption{Digits from MNIST (LeCun, Cortes, and Burges, n.d.)}
+\end{figure}
+In this chapter, we'll learn how to implement a neural net to classify handwritten digits from the MNIST data set in R using a TensorFlow neural net constructed using the Keras package. The MNIST data set contains thousands of handwritten digits, divided into a testing and a training set. [@lecun_cortes_burges] Figure 2.1 displays some of the MNIST digits.
+
+##### Keras and TensorFlow  
+  
+TensorFlow is an opensource computational library created by Google researchers specifically for machine learning that can be executed as a flow graph. In this way, TensorFlow is optimized for building neural nets, even complex ones.
+
+In TensorFlow, we write program functions into layers and then set our data up to flow through those layers. [@deepLearn]  
+Keras is a package that provides an RStudio interface to TensorFlow, with impressive levels of functionality. Far beyond serving as a neural net package, Keras gives R users access to the full suite of TensorFlow computational abilities, executed in C++ run time. Further, since TensorFlow is hardware independent, users can choose to run computations on their CPU, GPU (if in possession of a machine with a NVIDIA graphics card), or to connect to Google Cloud architecture. For these reasons, Keras may well prove over the next few years to be the best way to implement machine learning applications of all types in RStudio. [@chollet2015keras]
+
+##### Tensors
+
+Just as base R relies on vectors and matrices to store data, and as dplyr relies on data frames, TensorFlow relies on a base data type called a tensor. A tensor can be any size:  
+
+ * Scalar = 0D Tensor  
+ * Vector = 1D Tensor  
+ * Matrix = 2D Tensor  
+ * A matrix of matrices (can visualize as a cube) = 3D Tensor  
+ * Etc.    
+
+When discussing the size of a tensor, we can say *two-dimensional tensor*, *2-D tensor*, or *a tensor of rank 2*. The dimension refers to the number of axes the tensor has, so the convention is slightly different than our typical R convention of referring to dimension as the number of rows or columns in a data frame. [@deepLearn]
+\begin{figure}[H]
+  \centering
+      \includegraphics{ImageTensor.png}
+        \caption{Image Tensor (Fan and Messinger 2016)}
+\end{figure}
+Before we can train a neural net to recognize digits, we need to form the MNIST data into tensors of the correct size. For images, TensorFlow expects to receive grids of normalized pixels (dimensions 1 and 2), with a third axis to represent the color channels (labeled band in Figure 2.3), and a fourth axis representing each individual sample. In this case, our color channel has a length of one, since the digits data set is in gray-scale (labeled "Feature vector of a pixel" in Figure 2.3). [@fan_messinger_2016] All of this means image data is interpreted as a *tensor of rank four*. Finally, we need to convert the categorical response variable $y \in  [0,9]$ to a one-hot encoding.[@chollet2015keras] 
+
+
+```{r, warnings = FALSE}
+library(keras)
+set.seed(99)
+#MNIST comes preloaded in Keras
+
+mnist <- dataset_mnist()
+x_train <- mnist$train$x
+y_train <- mnist$train$y
+x_test <- mnist$test$x
+y_test <- mnist$test$y
+#This line is saving a few digits to compare to predictions later before converting to categorical
+y_test_to_compare <- y_test[27:39]
+```
+
+```{r}
+# forming tensors for input
+# note the images in MNIST are of size 28*28 pixels
+# array_reshape operates row-wise
+# array_reshape is the appropriate function 
+# here for it's C-style functionality
+x_train <- array_reshape(x = x_train, dim = c(nrow(x_train),28*28))
+x_test <- array_reshape(x = x_test, dim = c(nrow(x_test), 28*28))
+
+# normalizing the pixels 
+x_train <- x_train / 255
+x_test <- x_test / 255
+
+# One-hot encoding y
+# to_categorical is a KERAS function that 
+#"converts a class vector to binary class matrix"
+y_train <- to_categorical(y_train, 10)
+y_test <- to_categorical(y_test, 10)
+
+```
+
+#### Setting Up the Neural Net  
+  
+We will start by setting up a network with a single hidden layer. The call keras_model_sequential initializes a feed-forward network. Calls to layer_dense adds layers to the network which are fully connected to the previous layer, meaning each neuron sends inputs to every neuron of the next layer. Notice, the input layer does not need to be initialized in the model. Inside layer_dense, we specify the number of neurons in the layer (units), and the neuron function $g(x,w)$ (activation). In the first hidden layer, we also specify the size of the input from the tensor x_train. [@deepLearn]   
+
+```{r}
+#Initialize the model
+
+#first call to layer_dense() processes the images 
+#second call to layer_dense() returns an array of 
+#10 probability scores which sum to one that
+#denote probability image is digit 
+#specified by that neuron
+mod_simple <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "relu", 
+              input_shape = c(28*28)) %>% 
+  layer_dense(units = 10, activation = "softmax")
+```
+
+
+Next, we compile the network, specifying the type of stochastic gradient to use in optimization (optimizer), the loss function to optimize over (loss), and metrics for the network to produce while training. In this case, Rmsprop is a stochastic gradient method that uses normalized results instead of the raw gradient to control the speed of learning. Categorical Cross-entropy is a log loss function for use with categorical variables. The Keras documentation website can help with choosing the most appropriate optimization and loss methods for various prediction types. (https://keras.io) [@deepLearn]
+
+```{r}
+#compile the model.
+#notice, modifies in place
+mod_simple %>% compile(optimizer = "rmsprop", 
+                       loss = "categorical_crossentropy",
+                       metrics = c("accuracy"))
+```
+
+To train the model, we call fit, specifying the number of times to iterate over the entire data set (epochs) and the size of samples for the gradient (batch_size, default = 32). Saving this fit object allows for generation of a plot showing the training history. [@deepLearn]
+
+```{r}
+#train the model
+#Keras will modify in place
+
+mod_training_data <- mod_simple %>% 
+  fit(x_train, y_train, epochs = 10, batch_size = 128)
+
+#Plot fit history
+plot(mod_training_data)
+```
+
+After training, evaluate() will provide loss data for the test set and predict_classes will return predictions. 
+
+```{r}
+#Feeding trained model the test sets and checking for accuracy
+mod_simple_pred_results <- mod_simple %>% evaluate(x_test, y_test)
+mod_simple_pred_results
+
+#Can also get predictions
+test_preds <- mod_simple %>% predict_classes(x_test[27:39,])
+#Predicted digits
+test_preds
+#Actual digits
+y_test_to_compare
+```
+
+As our accuracy results indicate, training the MNIST set is a trivial task for a neural net.
+
+
+#### Sources:
+The Tom M. Mitchell quote from Wikipedia may be found here: Mitchell, T. (1997). Machine Learning. McGraw Hill. p. 2. ISBN 0-07-042807-7.  
+
+I relied on Albert Kim's Stat 495 Materials significantly, not only in the direct code examples but also in my subconscious, since I learned a great deal about machine learning from him in 495. Course materials may be found here: https://github.com/rudeboybert/STAT495/blob/master/README.md
+
+Information on plots for the random forest came from here: https://www.r-bloggers.com/random-forest-classification-of-mushrooms/
+
+  @allaire, @deepLearn, @chollet2015keras, @fan_messinger_2016, @ESL,
+  @Goodfellow-et-al-2016, @lecun_bengio_huffier_1998, @lecun_cortes_burges,
+  @moujahid_2016, @rouse
